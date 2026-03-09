@@ -83,6 +83,10 @@ export interface Vehicle {
   vin: string;
   powertrain: Powertrain;
   image: string;
+  sourceUrl?: string | null;
+  watchNotes?: string | null;
+  targetPriceUsd?: number | null;
+  targetMileage?: number | null;
   telemetry: TelemetrySnapshot;
   valuationHistory: ValuationPoint[];
   maintenance: MaintenanceTask[];

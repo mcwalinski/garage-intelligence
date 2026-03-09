@@ -13,6 +13,10 @@ export const vehicles: Vehicle[] = [
     powertrain: "gas",
     image:
       "https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=1200&q=80",
+    sourceUrl: null,
+    watchNotes: null,
+    targetPriceUsd: null,
+    targetMileage: null,
     telemetry: {
       capturedAt: "2026-03-07T19:42:00Z",
       odometerMiles: 18422,
@@ -113,6 +117,10 @@ export const vehicles: Vehicle[] = [
     powertrain: "ev",
     image:
       "https://images.unsplash.com/photo-1553440569-bcc63803a83d?auto=format&fit=crop&w=1200&q=80",
+    sourceUrl: null,
+    watchNotes: null,
+    targetPriceUsd: null,
+    targetMileage: null,
     telemetry: {
       capturedAt: "2026-03-07T20:05:00Z",
       odometerMiles: 26310,

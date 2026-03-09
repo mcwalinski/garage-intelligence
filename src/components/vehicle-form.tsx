@@ -16,6 +16,10 @@ interface VehicleFormValues {
   vin: string;
   powertrain: Powertrain;
   image: string;
+  sourceUrl: string;
+  watchNotes: string;
+  targetPriceUsd: string;
+  targetMileage: string;
 }
 
 interface VinLookupPayload {
@@ -48,7 +52,11 @@ const defaultValues: VehicleFormValues = {
   trim: "",
   vin: "",
   powertrain: "gas",
-  image: ""
+  image: "",
+  sourceUrl: "",
+  watchNotes: "",
+  targetPriceUsd: "",
+  targetMileage: ""
 };
 
 export function VehicleForm({
@@ -255,6 +263,50 @@ export function VehicleForm({
             value={formValues.image}
             onChange={(event) => updateField("image", event.target.value)}
             placeholder="https://..."
+            disabled={disabled}
+          />
+        </label>
+        <label className="field field--wide">
+          <span>Source URL</span>
+          <input
+            name="sourceUrl"
+            value={formValues.sourceUrl}
+            onChange={(event) => updateField("sourceUrl", event.target.value)}
+            placeholder="Listing, auction, dealer, or research URL"
+            disabled={disabled}
+          />
+        </label>
+        <label className="field">
+          <span>Target price</span>
+          <input
+            name="targetPriceUsd"
+            type="number"
+            min="0"
+            value={formValues.targetPriceUsd}
+            onChange={(event) => updateField("targetPriceUsd", event.target.value)}
+            placeholder="Optional"
+            disabled={disabled}
+          />
+        </label>
+        <label className="field">
+          <span>Target mileage</span>
+          <input
+            name="targetMileage"
+            type="number"
+            min="0"
+            value={formValues.targetMileage}
+            onChange={(event) => updateField("targetMileage", event.target.value)}
+            placeholder="Optional"
+            disabled={disabled}
+          />
+        </label>
+        <label className="field field--wide">
+          <span>Watch / ownership notes</span>
+          <input
+            name="watchNotes"
+            value={formValues.watchNotes}
+            onChange={(event) => updateField("watchNotes", event.target.value)}
+            placeholder="Ownership history, target spec, seller notes, or acquisition plan"
             disabled={disabled}
           />
         </label>

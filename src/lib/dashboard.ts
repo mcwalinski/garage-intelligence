@@ -22,6 +22,10 @@ interface CreateVehicleInput {
   vin: string;
   powertrain: Vehicle["powertrain"];
   image?: string;
+  sourceUrl?: string;
+  watchNotes?: string;
+  targetPriceUsd?: number | null;
+  targetMileage?: number | null;
 }
 
 interface CreateMaintenanceTaskInput {
@@ -100,6 +104,10 @@ interface VehicleRow {
   vin: string;
   powertrain: Vehicle["powertrain"];
   image: string;
+  source_url?: string | null;
+  watch_notes?: string | null;
+  target_price_usd?: number | null;
+  target_mileage?: number | null;
 }
 
 interface TelemetryRow {
@@ -274,7 +282,11 @@ async function ensureDemoGarageForUser(userId: string) {
     trim: vehicle.trim,
     vin: vehicle.vin,
     powertrain: vehicle.powertrain,
-    image: vehicle.image
+    image: vehicle.image,
+    source_url: vehicle.sourceUrl ?? null,
+    watch_notes: vehicle.watchNotes ?? null,
+    target_price_usd: vehicle.targetPriceUsd ?? null,
+    target_mileage: vehicle.targetMileage ?? null
   }));
 
   const { data: insertedVehicles, error: vehicleError } = await supabase
@@ -560,6 +572,10 @@ function buildVehicleMap(
       vin: vehicle.vin,
       powertrain: vehicle.powertrain,
       image: vehicle.image,
+      sourceUrl: vehicle.source_url ?? null,
+      watchNotes: vehicle.watch_notes ?? null,
+      targetPriceUsd: vehicle.target_price_usd ?? null,
+      targetMileage: vehicle.target_mileage ?? null,
       telemetry: latestTelemetry
         ? {
             capturedAt: latestTelemetry.captured_at,
@@ -659,7 +675,9 @@ async function fetchVehiclesFromDatabase(userId: string): Promise<Vehicle[]> {
 
   const { data: vehicleRows, error: vehicleError } = await supabase
     .from("vehicles")
-    .select("id, slug, ownership_status, nickname, year, make, model, trim, vin, powertrain, image")
+    .select(
+      "id, slug, ownership_status, nickname, year, make, model, trim, vin, powertrain, image, source_url, watch_notes, target_price_usd, target_mileage"
+    )
     .in("garage_id", garageIds)
     .order("created_at", { ascending: true });
 
@@ -812,6 +830,10 @@ export async function createVehicleForUser(userId: string, input: CreateVehicleI
       trim: input.trim,
       vin: input.vin.trim(),
       powertrain: input.powertrain,
+      source_url: input.sourceUrl?.trim() || null,
+      watch_notes: input.watchNotes?.trim() || null,
+      target_price_usd: input.targetPriceUsd ?? null,
+      target_mileage: input.targetMileage ?? null,
       image:
         input.image?.trim() ||
         "https://images.unsplash.com/photo-1494976388531-d1058494cdd8?auto=format&fit=crop&w=1200&q=80"
@@ -866,6 +888,10 @@ export async function updateVehicleForUser(userId: string, vehicleSlug: string, 
       trim: input.trim,
       vin: input.vin.trim(),
       powertrain: input.powertrain,
+      source_url: input.sourceUrl?.trim() || null,
+      watch_notes: input.watchNotes?.trim() || null,
+      target_price_usd: input.targetPriceUsd ?? null,
+      target_mileage: input.targetMileage ?? null,
       image: input.image?.trim() || existingVehicle.image
     })
     .eq("slug", vehicleSlug)

@@ -14,26 +14,30 @@ interface SmartcarCardProps {
   }>;
   garageVehicles: Array<{ id: string; label: string }>;
   disabled?: boolean;
+  compact?: boolean;
 }
 
 export function SmartcarCard({
   connectionCount,
   connectedVehicles,
   garageVehicles,
-  disabled = false
+  disabled = false,
+  compact = false
 }: SmartcarCardProps) {
   const firstConnectionId = connectedVehicles[0]?.connectionId;
 
   return (
     <section>
-      <div className="section-heading">
-        <div>
-          <span className="eyebrow">Telemetry</span>
-          <h2>Smartcar connection</h2>
+      {!compact ? (
+        <div className="section-heading">
+          <div>
+            <span className="eyebrow">Telemetry</span>
+            <h2>Smartcar connection</h2>
+          </div>
+          <p>Connect supported vehicles for live odometer, location, fuel, battery, and movement data.</p>
         </div>
-        <p>Connect supported vehicles for live odometer, location, fuel, battery, and movement data.</p>
-      </div>
-      <div className="card smartcar-card">
+      ) : null}
+      <div className={`card smartcar-card ${compact ? "smartcar-card--compact" : ""}`}>
         <div className="smartcar-card__header">
           <div>
             <strong>{connectionCount > 0 ? `${connectionCount} Smartcar connection${connectionCount === 1 ? "" : "s"}` : "No Smartcar connection yet"}</strong>

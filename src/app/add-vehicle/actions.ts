@@ -32,9 +32,15 @@ export async function addVehicleAction(formData: FormData) {
   const trim = readTrimmed(formData, "trim");
   const vin = readTrimmed(formData, "vin").toUpperCase();
   const image = readTrimmed(formData, "image");
+  const sourceUrl = readTrimmed(formData, "sourceUrl");
+  const watchNotes = readTrimmed(formData, "watchNotes");
+  const targetPriceUsdRaw = readTrimmed(formData, "targetPriceUsd");
+  const targetMileageRaw = readTrimmed(formData, "targetMileage");
   const powertrain = readTrimmed(formData, "powertrain") as Powertrain;
   const ownershipStatus = readTrimmed(formData, "ownershipStatus") as VehicleOwnershipStatus;
   const year = Number(yearRaw);
+  const targetPriceUsd = targetPriceUsdRaw ? Number(targetPriceUsdRaw) : null;
+  const targetMileage = targetMileageRaw ? Number(targetMileageRaw) : null;
 
   if (!nickname || !make || !model || !trim || !Number.isInteger(year)) {
     redirect("/?formError=Missing%20required%20vehicle%20fields");
@@ -56,6 +62,10 @@ export async function addVehicleAction(formData: FormData) {
     redirect("/?formError=VIN%20must%20be%20between%2011%20and%2017%20characters");
   }
 
+  if ((targetPriceUsdRaw && Number.isNaN(targetPriceUsd)) || (targetMileageRaw && Number.isNaN(targetMileage))) {
+    redirect("/?formError=Target%20price%20and%20target%20mileage%20must%20be%20numeric");
+  }
+
   const slug = await createVehicleForUser(user.id, {
     nickname,
     year,
@@ -65,7 +75,11 @@ export async function addVehicleAction(formData: FormData) {
     vin,
     powertrain,
     ownershipStatus,
-    image
+    image,
+    sourceUrl,
+    watchNotes,
+    targetPriceUsd,
+    targetMileage
   });
 
   revalidatePath("/");
@@ -89,9 +103,15 @@ export async function updateVehicleAction(formData: FormData) {
   const trim = readTrimmed(formData, "trim");
   const vin = readTrimmed(formData, "vin").toUpperCase();
   const image = readTrimmed(formData, "image");
+  const sourceUrl = readTrimmed(formData, "sourceUrl");
+  const watchNotes = readTrimmed(formData, "watchNotes");
+  const targetPriceUsdRaw = readTrimmed(formData, "targetPriceUsd");
+  const targetMileageRaw = readTrimmed(formData, "targetMileage");
   const powertrain = readTrimmed(formData, "powertrain") as Powertrain;
   const ownershipStatus = readTrimmed(formData, "ownershipStatus") as VehicleOwnershipStatus;
   const year = Number(yearRaw);
+  const targetPriceUsd = targetPriceUsdRaw ? Number(targetPriceUsdRaw) : null;
+  const targetMileage = targetMileageRaw ? Number(targetMileageRaw) : null;
 
   if (!vehicleId || !nickname || !make || !model || !trim || !Number.isInteger(year)) {
     redirect("/?formError=Missing%20required%20vehicle%20fields");
@@ -113,6 +133,10 @@ export async function updateVehicleAction(formData: FormData) {
     redirect("/?formError=VIN%20must%20be%20between%2011%20and%2017%20characters");
   }
 
+  if ((targetPriceUsdRaw && Number.isNaN(targetPriceUsd)) || (targetMileageRaw && Number.isNaN(targetMileage))) {
+    redirect("/?formError=Target%20price%20and%20target%20mileage%20must%20be%20numeric");
+  }
+
   const slug = await updateVehicleForUser(user.id, vehicleId, {
     nickname,
     year,
@@ -122,7 +146,11 @@ export async function updateVehicleAction(formData: FormData) {
     vin,
     powertrain,
     ownershipStatus,
-    image
+    image,
+    sourceUrl,
+    watchNotes,
+    targetPriceUsd,
+    targetMileage
   });
 
   revalidatePath("/");

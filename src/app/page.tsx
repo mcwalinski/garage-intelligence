@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { syncSmartcarConnectionAction } from "@/app/integrations/smartcar/actions";
 import { AddVehicleForm } from "@/components/add-vehicle-form";
 import { GarageBulkDeleteForm } from "@/components/garage-bulk-delete-form";
+import { HomeVideoFeed } from "@/components/home-video-feed";
 import { NotificationCenterCard } from "@/components/notification-center-card";
 import { SmartcarCard } from "@/components/smartcar-card";
 import { StatCard } from "@/components/stat-card";
@@ -11,6 +13,8 @@ import {
   getNotificationCenterForUser,
   getSmartcarSummaryForUser
 } from "@/lib/dashboard";
+import { getHomepageVideoFeed } from "@/lib/research";
+import { getWatchOpportunity, sortWatchingVehicles } from "@/lib/watchlist";
 
 export default async function HomePage({
   searchParams
@@ -25,59 +29,61 @@ export default async function HomePage({
   const summary = await getDashboardSummary(userId);
   const smartcar = await getSmartcarSummaryForUser(userId);
   const notifications = await getNotificationCenterForUser(userId, userEmail);
+  const videoFeed = await getHomepageVideoFeed();
+  const watchingVehicles = sortWatchingVehicles(
+    summary.vehicles.filter((vehicle) => vehicle.ownershipStatus === "watching")
+  ).slice(0, 3);
+  const firstConnectionId = smartcar.connectedVehicles[0]?.connectionId ?? null;
 
   return (
     <main className="page-shell">
-      <section className="hero">
-        <div className="hero__content">
+      <section className="sticky-topbar card">
+        <div className="sticky-topbar__brand">
           <span className="eyebrow">Garage Intelligence</span>
-          <h1>Browse, track, and manage every vehicle in one clean garage view.</h1>
-          <p>
-            Built for navigating vehicles first, then layering in live status, value movement,
-            service planning, and parts sourcing without losing the inventory view.
-          </p>
-          <div className="hero__actions">
-            <Link href="/api/dashboard" className="button button--primary">
-              View API payload
-            </Link>
-            <Link href="/login" className="button button--ghost">
-              {userEmail ? `Signed in as ${userEmail}` : "Sign in with Google"}
-            </Link>
-            <a href="#fleet" className="button button--ghost">
-              Browse garage
-            </a>
-          </div>
+          <strong>Vehicle control center</strong>
+          <small>{userEmail ? `Signed in as ${userEmail}` : "Sign in to unlock sync, alerts, and saved vehicles"}</small>
         </div>
-        <div className="hero__aside card">
-          <span className="eyebrow">Start Here</span>
-          <div className="hero__mini-actions">
-            <div className="hero__mini-card">
-              <strong>Add a vehicle</strong>
-              <p>Decode the VIN and get the garage record live first.</p>
-            </div>
-            <div className="hero__mini-card">
-              <strong>Connect telemetry</strong>
-              <p>Link supported vehicles for odometer, battery, fuel, and movement data.</p>
-            </div>
-            <div className="hero__mini-card">
-              <strong>Search parts</strong>
-              <p>Run Amazon and eBay searches from each vehicle detail page.</p>
-            </div>
-          </div>
+
+        <div className="sticky-topbar__nav">
+          <a href="#fleet" className="button button--ghost">
+            Browse
+          </a>
+          <Link href="/login" className="button button--ghost">
+            {userEmail ? "Account" : "Sign in"}
+          </Link>
+          <a href="#add-vehicle" className="button button--primary">
+            Add
+          </a>
+          <a href="#telemetry" className="button button--ghost">
+            Connect
+          </a>
+          {firstConnectionId && userId ? (
+            <form action={syncSmartcarConnectionAction}>
+              <input type="hidden" name="connectionId" value={firstConnectionId} />
+              <button type="submit" className="button button--ghost">
+                Sync
+              </button>
+            </form>
+          ) : (
+            <a href="#telemetry" className="button button--ghost">
+              Sync
+            </a>
+          )}
         </div>
       </section>
 
-      <section className="stats-grid">
-        <StatCard
-          label="Fleet Value"
-          value={`$${summary.totalValue.toLocaleString()}`}
-          helper="Latest normalized market estimate across all tracked vehicles"
-        />
-        <StatCard
-          label="Tracked Vehicles"
-          value={summary.totalVehicles.toString()}
-          helper={`Own ${summary.ownedNowCount} · Owned ${summary.ownedBeforeCount} · Watching ${summary.watchingCount}`}
-        />
+      <section className="home-intro">
+        <div>
+          <span className="eyebrow">Garage</span>
+          <h1>Navigate every vehicle from one place.</h1>
+        </div>
+        <p>
+          Browse current vehicles, historical records, and watchlist candidates without losing the
+          garage view.
+        </p>
+      </section>
+
+      <section className="stats-grid stats-grid--compact">
         <StatCard
           label="Maintenance Due"
           value={summary.dueTasks.toString()}
@@ -88,30 +94,132 @@ export default async function HomePage({
           value={summary.activeAlerts.toString()}
           helper="Movement, charging, and service reminders ready for notifications"
         />
+        <StatCard
+          label="Watchlist"
+          value={summary.watchingCount.toString()}
+          helper="Vehicles being tracked toward your buy targets"
+        />
+        <StatCard
+          label="Current Fleet"
+          value={summary.ownedNowCount.toString()}
+          helper={`Owned ${summary.ownedBeforeCount} archived · $${summary.totalValue.toLocaleString()} tracked value`}
+        />
       </section>
 
-      <section className="section-block home-split">
-        <div className="home-split__main">
-          <section id="fleet">
-            <div className="section-heading">
-              <div>
-                <span className="eyebrow">Garage</span>
-                <h2>Browse your vehicles</h2>
-              </div>
-              <p>
-                Every card is built to navigate quickly between vehicles, then drill into service,
-                market, and parts detail.
-              </p>
+      <section className="section-block">
+        <section id="fleet">
+          <div className="section-heading">
+            <div>
+              <span className="eyebrow">Garage</span>
+              <h2>Browse your vehicles</h2>
             </div>
-            {summary.vehicles.length > 0 ? (
-              <GarageBulkDeleteForm vehicles={summary.vehicles} disabled={!userId} />
-            ) : (
-              <div className="card empty-panel">
-                <p className="empty-state">No vehicles in this garage yet. Add your first vehicle from the action center.</p>
-              </div>
-            )}
-          </section>
+            <p>Move between current, past, and future vehicles from one inventory surface.</p>
+          </div>
+          {summary.vehicles.length > 0 ? (
+            <GarageBulkDeleteForm vehicles={summary.vehicles} disabled={!userId} allowBulkDelete={false} />
+          ) : (
+            <div className="card empty-panel">
+              <p className="empty-state">No vehicles in this garage yet. Add your first vehicle below.</p>
+            </div>
+          )}
+        </section>
+      </section>
 
+      {watchingVehicles.length > 0 ? (
+        <section className="section-block">
+          <div className="section-heading">
+            <div>
+              <span className="eyebrow">Watching</span>
+              <h2>Watchlist opportunities</h2>
+            </div>
+            <p>Track the watched vehicles that are closest to your target price and mileage first.</p>
+          </div>
+          <div className="watchlist-grid">
+            {watchingVehicles.map((vehicle) => {
+              const opportunity = getWatchOpportunity(vehicle);
+
+              return (
+                <Link key={vehicle.id} href={`/vehicles/${vehicle.id}`} className="card watch-card">
+                  <div className="watch-card__header">
+                    <div>
+                      <span className="eyebrow">{vehicle.nickname}</span>
+                      <h3>
+                        {vehicle.year} {vehicle.make} {vehicle.model}
+                      </h3>
+                    </div>
+                    <span
+                      className={`status-pill ${
+                        opportunity.price.tone === "positive"
+                          ? "status-live"
+                          : opportunity.price.tone === "negative"
+                            ? "status-due"
+                            : "status-upcoming"
+                      }`}
+                    >
+                      {opportunity.price.tone === "positive"
+                        ? "Price in range"
+                        : opportunity.price.tone === "negative"
+                          ? "Above target"
+                          : "Watch closely"}
+                    </span>
+                  </div>
+                  <div className="watch-card__metrics">
+                    <div>
+                      <span>Market value</span>
+                      <strong>
+                        {opportunity.latestValue ? `$${opportunity.latestValue.toLocaleString()}` : "Pending"}
+                      </strong>
+                    </div>
+                    <div>
+                      <span>Price target</span>
+                      <strong>
+                        {vehicle.targetPriceUsd ? `$${vehicle.targetPriceUsd.toLocaleString()}` : "Not set"}
+                      </strong>
+                    </div>
+                    <div>
+                      <span>Mileage target</span>
+                      <strong>
+                        {vehicle.targetMileage ? `${vehicle.targetMileage.toLocaleString()} mi` : "Not set"}
+                      </strong>
+                    </div>
+                  </div>
+                  <div className="watch-card__notes">
+                    <p>{opportunity.summary}</p>
+                    <small>
+                      {opportunity.price.label}
+                      {vehicle.targetMileage ? ` · ${opportunity.mileage.label}` : ""}
+                    </small>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
+
+      <HomeVideoFeed channels={videoFeed.channels} videos={videoFeed.videos} />
+
+      <section className="section-block" id="operations">
+        <div className="section-heading">
+          <div>
+            <span className="eyebrow">Operations</span>
+            <h2>Keep the garage moving</h2>
+          </div>
+          <p>Add vehicles, connect telemetry, refresh valuation data, and manage alerts in one place.</p>
+        </div>
+        <div className="home-actions-grid">
+          <section id="add-vehicle">
+            <AddVehicleForm disabled={!userId} error={params.formError} />
+          </section>
+          <section id="telemetry">
+            <SmartcarCard
+              connectionCount={smartcar.connectionCount}
+              connectedVehicles={smartcar.connectedVehicles}
+              garageVehicles={smartcar.garageVehicles ?? []}
+              disabled={!userId}
+            />
+          </section>
+          <ValuationRefreshCard disabled={!userId} />
           <NotificationCenterCard
             disabled={!userId}
             preferences={notifications.preferences}
@@ -119,24 +227,6 @@ export default async function HomePage({
             recentDeliveries={notifications.recentDeliveries}
           />
         </div>
-
-        <aside className="home-split__side">
-          <div className="section-heading section-heading--stacked">
-            <div>
-              <span className="eyebrow">Actions</span>
-              <h2>Garage action center</h2>
-            </div>
-            <p>Connection, intake, and refresh controls live here so browsing and operations stay separate.</p>
-          </div>
-          <AddVehicleForm disabled={!userId} error={params.formError} />
-          <SmartcarCard
-            connectionCount={smartcar.connectionCount}
-            connectedVehicles={smartcar.connectedVehicles}
-            garageVehicles={smartcar.garageVehicles ?? []}
-            disabled={!userId}
-          />
-          <ValuationRefreshCard disabled={!userId} />
-        </aside>
       </section>
     </main>
   );

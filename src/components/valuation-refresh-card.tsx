@@ -2,19 +2,22 @@ import { refreshGarageValuationsAction } from "@/app/integrations/marketcheck/ac
 
 interface ValuationRefreshCardProps {
   disabled?: boolean;
+  compact?: boolean;
 }
 
-export function ValuationRefreshCard({ disabled = false }: ValuationRefreshCardProps) {
+export function ValuationRefreshCard({ disabled = false, compact = false }: ValuationRefreshCardProps) {
   return (
     <section>
-      <div className="section-heading">
-        <div>
-          <span className="eyebrow">Market value</span>
-          <h2>Refresh valuations</h2>
+      {!compact ? (
+        <div className="section-heading">
+          <div>
+            <span className="eyebrow">Market value</span>
+            <h2>Refresh valuations</h2>
+          </div>
+          <p>Pull fresh MarketCheck pricing snapshots for every VIN-backed vehicle in the garage.</p>
         </div>
-        <p>Pull fresh MarketCheck pricing snapshots for every VIN-backed vehicle in the garage.</p>
-      </div>
-      <div className="card smartcar-card">
+      ) : null}
+      <div className={`card smartcar-card ${compact ? "smartcar-card--compact" : ""}`}>
         <div className="smartcar-card__header">
           <div>
             <strong>Garage valuation refresh</strong>

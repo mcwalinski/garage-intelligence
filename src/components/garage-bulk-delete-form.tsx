@@ -4,14 +4,23 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { bulkDeleteVehiclesAction } from "@/app/add-vehicle/actions";
 import { Vehicle } from "@/lib/types";
+import { getWatchOpportunity } from "@/lib/watchlist";
 
 interface GarageBulkDeleteFormProps {
   vehicles: Vehicle[];
   disabled?: boolean;
+  allowBulkDelete?: boolean;
 }
 
-export function GarageBulkDeleteForm({ vehicles, disabled = false }: GarageBulkDeleteFormProps) {
+type GarageFilter = "all" | "own" | "owned" | "watching";
+
+export function GarageBulkDeleteForm({
+  vehicles,
+  disabled = false,
+  allowBulkDelete = true
+}: GarageBulkDeleteFormProps) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [activeFilter, setActiveFilter] = useState<GarageFilter>("all");
   const groupedVehicles = useMemo(
     () => ({
       own: vehicles.filter((vehicle) => vehicle.ownershipStatus === "own"),
@@ -20,9 +29,13 @@ export function GarageBulkDeleteForm({ vehicles, disabled = false }: GarageBulkD
     }),
     [vehicles]
   );
+  const visibleVehicles = useMemo(
+    () => (activeFilter === "all" ? vehicles : groupedVehicles[activeFilter]),
+    [activeFilter, groupedVehicles, vehicles]
+  );
   const allSelected = useMemo(
-    () => vehicles.length > 0 && selectedIds.length === vehicles.length,
-    [selectedIds.length, vehicles.length]
+    () => visibleVehicles.length > 0 && visibleVehicles.every((vehicle) => selectedIds.includes(vehicle.id)),
+    [selectedIds, visibleVehicles]
   );
 
   function toggleVehicle(vehicleId: string) {
@@ -32,13 +45,19 @@ export function GarageBulkDeleteForm({ vehicles, disabled = false }: GarageBulkD
   }
 
   function toggleAll() {
-    setSelectedIds(allSelected ? [] : vehicles.map((vehicle) => vehicle.id));
+    const visibleIds = visibleVehicles.map((vehicle) => vehicle.id);
+    setSelectedIds((current) =>
+      allSelected
+        ? current.filter((id) => !visibleIds.includes(id))
+        : Array.from(new Set([...current, ...visibleIds]))
+    );
   }
 
   function renderVehicleCard(vehicle: Vehicle) {
-    const isSelected = selectedIds.includes(vehicle.id);
+    const isSelected = allowBulkDelete && selectedIds.includes(vehicle.id);
     const latestValue = vehicle.valuationHistory[vehicle.valuationHistory.length - 1];
     const topTask = vehicle.maintenance[0];
+    const watchOpportunity = vehicle.ownershipStatus === "watching" ? getWatchOpportunity(vehicle) : null;
     const ownershipLabel =
       vehicle.ownershipStatus === "own" ? "Own" : vehicle.ownershipStatus === "owned" ? "Owned" : "Watching";
     const ownershipClass =
@@ -56,17 +75,19 @@ export function GarageBulkDeleteForm({ vehicles, disabled = false }: GarageBulkD
         className={`card vehicle-card vehicle-card--selectable ${isSelected ? "vehicle-card--selected" : ""}`}
       >
         <div className="vehicle-card__image" style={{ backgroundImage: `url(${vehicle.image})` }}>
-          <label className="vehicle-select-pill">
-            <input
-              type="checkbox"
-              name="vehicleIds"
-              value={vehicle.id}
-              checked={isSelected}
-              onChange={() => toggleVehicle(vehicle.id)}
-              disabled={disabled}
-            />
-            <span>Select</span>
-          </label>
+          {allowBulkDelete ? (
+            <label className="vehicle-select-pill">
+              <input
+                type="checkbox"
+                name="vehicleIds"
+                value={vehicle.id}
+                checked={isSelected}
+                onChange={() => toggleVehicle(vehicle.id)}
+                disabled={disabled}
+              />
+              <span>Select</span>
+            </label>
+          ) : null}
         </div>
         <div className="vehicle-card__body">
           <div className="vehicle-card__heading">
@@ -84,12 +105,24 @@ export function GarageBulkDeleteForm({ vehicles, disabled = false }: GarageBulkD
               <strong>{latestValue ? `$${latestValue.marketValueUsd.toLocaleString()}` : "Pending"}</strong>
             </div>
             <div>
-              <span>Energy</span>
-              <strong>{vehicle.telemetry.batteryOrFuelPercent}%</strong>
+              <span>{vehicle.ownershipStatus === "watching" ? "Price target" : "Energy"}</span>
+              <strong>
+                {vehicle.ownershipStatus === "watching"
+                  ? vehicle.targetPriceUsd
+                    ? `$${vehicle.targetPriceUsd.toLocaleString()}`
+                    : "Not set"
+                  : `${vehicle.telemetry.batteryOrFuelPercent}%`}
+              </strong>
             </div>
             <div>
-              <span>Odometer</span>
-              <strong>{vehicle.telemetry.odometerMiles.toLocaleString()} mi</strong>
+              <span>{vehicle.ownershipStatus === "watching" ? "Mileage target" : "Odometer"}</span>
+              <strong>
+                {vehicle.ownershipStatus === "watching"
+                  ? vehicle.targetMileage
+                    ? `${vehicle.targetMileage.toLocaleString()} mi`
+                    : "Not set"
+                  : `${vehicle.telemetry.odometerMiles.toLocaleString()} mi`}
+              </strong>
             </div>
           </div>
           <p className="vehicle-card__task">
@@ -99,7 +132,7 @@ export function GarageBulkDeleteForm({ vehicles, disabled = false }: GarageBulkD
                 : "No maintenance plan yet"
               : vehicle.ownershipStatus === "owned"
                 ? "Historical vehicle record"
-                : "Watchlist vehicle"}
+                : watchOpportunity?.summary ?? "Watchlist vehicle"}
           </p>
           <Link href={`/vehicles/${vehicle.id}`} className="button button--ghost vehicle-card__link">
             Open vehicle
@@ -114,13 +147,19 @@ export function GarageBulkDeleteForm({ vehicles, disabled = false }: GarageBulkD
     { key: "owned", title: "Previously owned", helper: "Historical records kept for reference, comps, and service history." },
     { key: "watching", title: "Watching", helper: "Future vehicles and market watchlist candidates." }
   ];
+  const tabs: Array<{ key: GarageFilter; label: string; count: number }> = [
+    { key: "all", label: "All", count: vehicles.length },
+    { key: "own", label: "Own", count: groupedVehicles.own.length },
+    { key: "owned", label: "Owned", count: groupedVehicles.owned.length },
+    { key: "watching", label: "Watching", count: groupedVehicles.watching.length }
+  ];
 
   return (
     <form
       action={bulkDeleteVehiclesAction}
       className="bulk-delete-form"
       onSubmit={(event) => {
-        if (selectedIds.length === 0) {
+        if (!allowBulkDelete || selectedIds.length === 0) {
           event.preventDefault();
           return;
         }
@@ -130,32 +169,48 @@ export function GarageBulkDeleteForm({ vehicles, disabled = false }: GarageBulkD
         }
       }}
     >
-      <div className="bulk-delete-toolbar card">
-        <label className="bulk-delete-toggle">
-          <input
-            type="checkbox"
-            checked={allSelected}
-            onChange={toggleAll}
-            disabled={disabled || vehicles.length === 0}
-          />
-          <span>Select all</span>
-        </label>
-        <div className="bulk-delete-toolbar__actions">
-          <span className="helper-text">
-            {selectedIds.length} selected{vehicles.length > 0 ? ` of ${vehicles.length}` : ""}
-          </span>
-          <button
-            type="submit"
-            className="button button--danger"
-            disabled={disabled || selectedIds.length === 0}
-          >
-            Delete selected
-          </button>
+      {allowBulkDelete ? (
+        <div className="bulk-delete-toolbar card">
+          <label className="bulk-delete-toggle">
+            <input
+              type="checkbox"
+              checked={allSelected}
+              onChange={toggleAll}
+              disabled={disabled || vehicles.length === 0}
+            />
+            <span>Select all</span>
+          </label>
+          <div className="bulk-delete-toolbar__actions">
+            <span className="helper-text">
+              {selectedIds.length} selected{vehicles.length > 0 ? ` of ${vehicles.length}` : ""}
+            </span>
+            <button
+              type="submit"
+              className="button button--danger"
+              disabled={disabled || selectedIds.length === 0}
+            >
+              Delete selected
+            </button>
+          </div>
         </div>
+      ) : null}
+
+      <div className="garage-filter-bar">
+        {tabs.map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            className={`garage-filter-tab ${activeFilter === tab.key ? "garage-filter-tab--active" : ""}`}
+            onClick={() => setActiveFilter(tab.key)}
+          >
+            <span>{tab.label}</span>
+            <strong>{tab.count}</strong>
+          </button>
+        ))}
       </div>
 
       {sections.map((section) =>
-        groupedVehicles[section.key].length > 0 ? (
+        groupedVehicles[section.key].length > 0 && (activeFilter === "all" || activeFilter === section.key) ? (
           <section key={section.key} className="garage-status-section">
             <div className="garage-status-section__header">
               <div>
