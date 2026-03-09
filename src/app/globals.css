@@ -77,9 +77,6 @@ label {
 }
 
 .sticky-topbar {
-  position: sticky;
-  top: 16px;
-  z-index: 20;
   align-items: center;
   justify-content: space-between;
   gap: 20px;
