@@ -111,9 +111,9 @@ label {
 }
 
 .home-intro {
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 24px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
   margin: 10px 0 0;
 }
 
@@ -125,7 +125,7 @@ label {
 }
 
 .home-intro p {
-  max-width: 48ch;
+  max-width: 56ch;
   margin: 0;
   font-size: 1rem;
   line-height: 1.7;

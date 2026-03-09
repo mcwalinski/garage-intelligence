@@ -73,10 +73,8 @@ export default async function HomePage({
       </section>
 
       <section className="home-intro">
-        <div>
-          <span className="eyebrow">Garage</span>
-          <h1>Navigate every vehicle from one place.</h1>
-        </div>
+        <span className="eyebrow">Garage</span>
+        <h1>Navigate every vehicle from one place.</h1>
         <p>
           Browse current vehicles, historical records, and watchlist candidates without losing the
           garage view.
