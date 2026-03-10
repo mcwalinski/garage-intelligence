@@ -47,6 +47,11 @@ export default async function EditVehiclePage({
             image: vehicle.image,
             sourceUrl: vehicle.sourceUrl ?? "",
             watchNotes: vehicle.watchNotes ?? "",
+            lifecycleNotes: vehicle.lifecycleNotes ?? "",
+            acquisitionDate: vehicle.acquisitionDate ?? "",
+            dispositionDate: vehicle.dispositionDate ?? "",
+            purchasePriceUsd: vehicle.purchasePriceUsd ? String(vehicle.purchasePriceUsd) : "",
+            salePriceUsd: vehicle.salePriceUsd ? String(vehicle.salePriceUsd) : "",
             targetPriceUsd: vehicle.targetPriceUsd ? String(vehicle.targetPriceUsd) : "",
             targetMileage: vehicle.targetMileage ? String(vehicle.targetMileage) : ""
           }}

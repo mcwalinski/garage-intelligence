@@ -50,7 +50,10 @@ export async function GET(request: Request) {
         status: "active",
         expires_at: computeExpiryDate(token.expires_in),
         metadata: {
-          source: "smartcar-oauth"
+          source: "smartcar-oauth",
+          last_sync_status: "connected",
+          last_sync_at: new Date().toISOString(),
+          last_sync_error: null
         }
       })
       .select("id")

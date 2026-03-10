@@ -8,6 +8,7 @@ Garage Intelligence is a starter platform for tracking a personal vehicle fleet 
 - Connected-car telemetry and movement insights
 - Market value tracking with historical trends
 - Maintenance planning, alerts, and service workflow hooks
+- Vehicle lifecycle tracking across owned, previously owned, and watched vehicles
 - Parts and accessory discovery across marketplaces
 
 ## Verified provider direction

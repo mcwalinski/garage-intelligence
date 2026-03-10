@@ -24,6 +24,11 @@ interface CreateVehicleInput {
   image?: string;
   sourceUrl?: string;
   watchNotes?: string;
+  lifecycleNotes?: string;
+  acquisitionDate?: string | null;
+  dispositionDate?: string | null;
+  purchasePriceUsd?: number | null;
+  salePriceUsd?: number | null;
   targetPriceUsd?: number | null;
   targetMileage?: number | null;
 }
@@ -106,6 +111,11 @@ interface VehicleRow {
   image: string;
   source_url?: string | null;
   watch_notes?: string | null;
+  lifecycle_notes?: string | null;
+  acquisition_date?: string | null;
+  disposition_date?: string | null;
+  purchase_price_usd?: number | null;
+  sale_price_usd?: number | null;
   target_price_usd?: number | null;
   target_mileage?: number | null;
 }
@@ -574,6 +584,13 @@ function buildVehicleMap(
       image: vehicle.image,
       sourceUrl: vehicle.source_url ?? null,
       watchNotes: vehicle.watch_notes ?? null,
+      lifecycleNotes: vehicle.lifecycle_notes ?? null,
+      acquisitionDate: vehicle.acquisition_date ?? null,
+      dispositionDate: vehicle.disposition_date ?? null,
+      purchasePriceUsd:
+        typeof vehicle.purchase_price_usd === "number" ? vehicle.purchase_price_usd : vehicle.purchase_price_usd ? Number(vehicle.purchase_price_usd) : null,
+      salePriceUsd:
+        typeof vehicle.sale_price_usd === "number" ? vehicle.sale_price_usd : vehicle.sale_price_usd ? Number(vehicle.sale_price_usd) : null,
       targetPriceUsd: vehicle.target_price_usd ?? null,
       targetMileage: vehicle.target_mileage ?? null,
       telemetry: latestTelemetry
@@ -676,7 +693,7 @@ async function fetchVehiclesFromDatabase(userId: string): Promise<Vehicle[]> {
   const { data: vehicleRows, error: vehicleError } = await supabase
     .from("vehicles")
     .select(
-      "id, slug, ownership_status, nickname, year, make, model, trim, vin, powertrain, image, source_url, watch_notes, target_price_usd, target_mileage"
+      "id, slug, ownership_status, nickname, year, make, model, trim, vin, powertrain, image, source_url, watch_notes, lifecycle_notes, acquisition_date, disposition_date, purchase_price_usd, sale_price_usd, target_price_usd, target_mileage"
     )
     .in("garage_id", garageIds)
     .order("created_at", { ascending: true });
@@ -832,6 +849,11 @@ export async function createVehicleForUser(userId: string, input: CreateVehicleI
       powertrain: input.powertrain,
       source_url: input.sourceUrl?.trim() || null,
       watch_notes: input.watchNotes?.trim() || null,
+      lifecycle_notes: input.lifecycleNotes?.trim() || null,
+      acquisition_date: input.acquisitionDate || null,
+      disposition_date: input.dispositionDate || null,
+      purchase_price_usd: input.purchasePriceUsd ?? null,
+      sale_price_usd: input.salePriceUsd ?? null,
       target_price_usd: input.targetPriceUsd ?? null,
       target_mileage: input.targetMileage ?? null,
       image:
@@ -890,6 +912,11 @@ export async function updateVehicleForUser(userId: string, vehicleSlug: string, 
       powertrain: input.powertrain,
       source_url: input.sourceUrl?.trim() || null,
       watch_notes: input.watchNotes?.trim() || null,
+      lifecycle_notes: input.lifecycleNotes?.trim() || null,
+      acquisition_date: input.acquisitionDate || null,
+      disposition_date: input.dispositionDate || null,
+      purchase_price_usd: input.purchasePriceUsd ?? null,
+      sale_price_usd: input.salePriceUsd ?? null,
       target_price_usd: input.targetPriceUsd ?? null,
       target_mileage: input.targetMileage ?? null,
       image: input.image?.trim() || existingVehicle.image
@@ -1242,6 +1269,96 @@ export async function syncMaintenanceAlertsForUser(userId: string, email?: strin
         });
       }
     }
+
+    const telemetryInsights = await getVehicleTelemetryInsightsForUser(userId, vehicle.id);
+    const energyPercent = vehicle.telemetry.batteryOrFuelPercent;
+
+    if (energyPercent > 0 && energyPercent <= 10) {
+      generatedAlerts.push({
+        externalId: `telemetry:${vehicle.id}:low-energy-critical`,
+        vehicleSlug: vehicle.id,
+        title: `${vehicle.nickname}: energy level is critically low`,
+        body: `${vehicle.year} ${vehicle.make} ${vehicle.model} is at ${Math.round(energyPercent)}%. Charge or refuel soon.`,
+        severity: "critical"
+      });
+    } else if (energyPercent > 10 && energyPercent <= 20) {
+      generatedAlerts.push({
+        externalId: `telemetry:${vehicle.id}:low-energy-warning`,
+        vehicleSlug: vehicle.id,
+        title: `${vehicle.nickname}: energy level is low`,
+        body: `${vehicle.year} ${vehicle.make} ${vehicle.model} is at ${Math.round(energyPercent)}%. Plan a charge or fuel stop.`,
+        severity: "warning"
+      });
+    }
+
+    if (telemetryInsights?.freshness === "stale") {
+      generatedAlerts.push({
+        externalId: `telemetry:${vehicle.id}:stale-sync`,
+        vehicleSlug: vehicle.id,
+        title: `${vehicle.nickname}: Smartcar data is stale`,
+        body: `Telemetry has not refreshed in the last 24 hours. Sync again to confirm current vehicle state.`,
+        severity: "info"
+      });
+    }
+
+    if (
+      telemetryInsights &&
+      telemetryInsights.movementMiles !== null &&
+      telemetryInsights.movementMiles >= 25
+    ) {
+      generatedAlerts.push({
+        externalId: `telemetry:${vehicle.id}:movement`,
+        vehicleSlug: vehicle.id,
+        title: `${vehicle.nickname}: significant movement detected`,
+        body: `${vehicle.year} ${vehicle.make} ${vehicle.model} moved about ${telemetryInsights.movementMiles.toLocaleString()} miles since the prior Smartcar snapshot.`,
+        severity: "info"
+      });
+    }
+  }
+
+  const watchingVehicles = vehicles.filter((vehicle) => vehicle.ownershipStatus === "watching");
+  for (const vehicle of watchingVehicles) {
+    const latestValue = vehicle.valuationHistory[vehicle.valuationHistory.length - 1]?.marketValueUsd ?? null;
+    const hasTargets = vehicle.targetPriceUsd || vehicle.targetMileage;
+    if (!hasTargets) {
+      continue;
+    }
+
+    if (typeof vehicle.targetPriceUsd === "number" && latestValue !== null && latestValue <= vehicle.targetPriceUsd) {
+      generatedAlerts.push({
+        externalId: `watchlist:${vehicle.id}:price-hit`,
+        vehicleSlug: vehicle.id,
+        title: `${vehicle.nickname}: price target reached`,
+        body: `${vehicle.year} ${vehicle.make} ${vehicle.model} is now around $${latestValue.toLocaleString()}, at or below your target of $${vehicle.targetPriceUsd.toLocaleString()}.`,
+        severity: "info"
+      });
+    } else if (
+      typeof vehicle.targetPriceUsd === "number" &&
+      latestValue !== null &&
+      latestValue <= vehicle.targetPriceUsd * 1.05
+    ) {
+      generatedAlerts.push({
+        externalId: `watchlist:${vehicle.id}:price-close`,
+        vehicleSlug: vehicle.id,
+        title: `${vehicle.nickname}: price is close`,
+        body: `${vehicle.year} ${vehicle.make} ${vehicle.model} is within 5% of your target price at roughly $${latestValue.toLocaleString()}.`,
+        severity: "info"
+      });
+    }
+
+    if (
+      typeof vehicle.targetMileage === "number" &&
+      vehicle.telemetry.odometerMiles > 0 &&
+      vehicle.telemetry.odometerMiles <= vehicle.targetMileage
+    ) {
+      generatedAlerts.push({
+        externalId: `watchlist:${vehicle.id}:mileage-hit`,
+        vehicleSlug: vehicle.id,
+        title: `${vehicle.nickname}: mileage target reached`,
+        body: `${vehicle.year} ${vehicle.make} ${vehicle.model} is listed around ${vehicle.telemetry.odometerMiles.toLocaleString()} miles, within your target of ${vehicle.targetMileage.toLocaleString()} miles.`,
+        severity: "info"
+      });
+    }
   }
 
   const supabase = createSupabaseAdminClient();
@@ -1253,6 +1370,8 @@ export async function syncMaintenanceAlertsForUser(userId: string, email?: strin
   );
   const vehicleIdBySlug = new Map(vehicleRows.map((item) => [item.slug, item.row.id]));
   const maintenancePrefixList = vehicles.map((vehicle) => `maintenance:${vehicle.id}:`);
+  const telemetryPrefixList = activeOwnershipVehicles.map((vehicle) => `telemetry:${vehicle.id}:`);
+  const watchlistPrefixList = watchingVehicles.map((vehicle) => `watchlist:${vehicle.id}:`);
 
   const { data: existingAlerts, error: existingAlertsError } = await supabase
     .from("alerts")
@@ -1266,8 +1385,14 @@ export async function syncMaintenanceAlertsForUser(userId: string, email?: strin
   const currentMaintenanceAlerts = (existingAlerts ?? []).filter((alert) =>
     maintenancePrefixList.some((prefix) => alert.external_id.startsWith(prefix))
   );
+  const currentWatchAlerts = (existingAlerts ?? []).filter((alert) =>
+    watchlistPrefixList.some((prefix) => alert.external_id.startsWith(prefix))
+  );
+  const currentTelemetryAlerts = (existingAlerts ?? []).filter((alert) =>
+    telemetryPrefixList.some((prefix) => alert.external_id.startsWith(prefix))
+  );
   const nextExternalIds = new Set(generatedAlerts.map((alert) => alert.externalId));
-  const staleAlertIds = currentMaintenanceAlerts
+  const staleAlertIds = [...currentMaintenanceAlerts, ...currentWatchAlerts, ...currentTelemetryAlerts]
     .filter((alert) => !nextExternalIds.has(alert.external_id))
     .map((alert) => alert.id);
 
@@ -1439,7 +1564,6 @@ export async function getDashboardSummary(userId?: string | null) {
     .flatMap((vehicle) => vehicle.maintenance)
     .filter((task) => task.status === "due" || task.status === "overdue").length;
   const activeAlerts = vehicles
-    .filter((vehicle) => vehicle.ownershipStatus === "own")
     .flatMap((vehicle) => vehicle.alerts).length;
 
   return {
@@ -1458,6 +1582,11 @@ export async function getSmartcarSummaryForUser(userId?: string | null) {
   if (!userId || !canUseDatabase()) {
     return {
       connectionCount: 0,
+      linkedCount: 0,
+      freshVehicleCount: 0,
+      lastSyncedAt: null as string | null,
+      lastSyncStatus: null as string | null,
+      lastSyncError: null as string | null,
       connectedVehicles: [] as Array<{
         id: string;
         make: string;
@@ -1466,6 +1595,12 @@ export async function getSmartcarSummaryForUser(userId?: string | null) {
         linkedVehicleId: string | null;
         linkedVehicleLabel: string | null;
         connectionId: string | null;
+        lastSyncedAt: string | null;
+        odometerMiles: number | null;
+        batteryOrFuelPercent: number | null;
+        latitude: number | null;
+        longitude: number | null;
+        telemetrySource: string | null;
       }>,
       garageVehicles: [] as Array<{ id: string; label: string }>
     };
@@ -1476,6 +1611,11 @@ export async function getSmartcarSummaryForUser(userId?: string | null) {
   if (!garageId) {
     return {
       connectionCount: 0,
+      linkedCount: 0,
+      freshVehicleCount: 0,
+      lastSyncedAt: null,
+      lastSyncStatus: null,
+      lastSyncError: null,
       connectedVehicles: [],
       garageVehicles: []
     };
@@ -1484,7 +1624,7 @@ export async function getSmartcarSummaryForUser(userId?: string | null) {
   const supabase = createSupabaseAdminClient();
   const { data: connections, error: connectionsError } = await supabase
     .from("provider_connections")
-    .select("id")
+    .select("id, status, metadata, updated_at")
     .eq("provider", "smartcar")
     .eq("garage_id", garageId)
     .eq("status", "active");
@@ -1492,6 +1632,11 @@ export async function getSmartcarSummaryForUser(userId?: string | null) {
   if (connectionsError || !connections) {
     return {
       connectionCount: 0,
+      linkedCount: 0,
+      freshVehicleCount: 0,
+      lastSyncedAt: null,
+      lastSyncStatus: null,
+      lastSyncError: null,
       connectedVehicles: [],
       garageVehicles: []
     };
@@ -1502,7 +1647,13 @@ export async function getSmartcarSummaryForUser(userId?: string | null) {
   if (connectionIds.length === 0) {
     return {
       connectionCount: 0,
-      connectedVehicles: []
+      linkedCount: 0,
+      freshVehicleCount: 0,
+      lastSyncedAt: null,
+      lastSyncStatus: null,
+      lastSyncError: null,
+      connectedVehicles: [],
+      garageVehicles: []
     };
   }
 
@@ -1515,6 +1666,11 @@ export async function getSmartcarSummaryForUser(userId?: string | null) {
   if (vehiclesError || !providerVehicles) {
     return {
       connectionCount: connections.length,
+      linkedCount: 0,
+      freshVehicleCount: 0,
+      lastSyncedAt: null,
+      lastSyncStatus: null,
+      lastSyncError: null,
       connectedVehicles: [],
       garageVehicles: []
     };
@@ -1535,21 +1691,140 @@ export async function getSmartcarSummaryForUser(userId?: string | null) {
       }
     ])
   );
+  const linkedVehicleIds = providerVehicles
+    .map((vehicle) => vehicle.linked_vehicle_id)
+    .filter((value): value is string => Boolean(value));
+  const { data: telemetryRows } = linkedVehicleIds.length
+    ? await supabase
+        .from("telemetry_snapshots")
+        .select("vehicle_id, captured_at, odometer_miles, battery_or_fuel_percent, latitude, longitude, source")
+        .in("vehicle_id", linkedVehicleIds)
+        .order("captured_at", { ascending: false })
+    : { data: [] as Array<{
+        vehicle_id: string;
+        captured_at: string;
+        odometer_miles: number;
+        battery_or_fuel_percent: number;
+        latitude: number;
+        longitude: number;
+        source: string;
+      }> };
 
-  return {
-    connectionCount: connections.length,
-    connectedVehicles: providerVehicles.map((vehicle) => ({
+  const latestTelemetryByVehicleId = new Map<
+    string,
+    {
+      captured_at: string;
+      odometer_miles: number;
+      battery_or_fuel_percent: number;
+      latitude: number;
+      longitude: number;
+      source: string;
+    }
+  >();
+
+  for (const row of telemetryRows ?? []) {
+    if (!latestTelemetryByVehicleId.has(row.vehicle_id)) {
+      latestTelemetryByVehicleId.set(row.vehicle_id, row);
+    }
+  }
+
+  const now = Date.now();
+  const freshWindowMs = 24 * 60 * 60 * 1000;
+  const connectedVehicles = providerVehicles.map((vehicle) => {
+    const telemetry = vehicle.linked_vehicle_id
+      ? latestTelemetryByVehicleId.get(vehicle.linked_vehicle_id)
+      : undefined;
+
+    return {
       id: vehicle.id,
       make: vehicle.make ?? "Unknown",
       model: vehicle.model ?? "Vehicle",
       year: vehicle.year ?? null,
       linkedVehicleId: garageVehicleMap.get(vehicle.linked_vehicle_id ?? "")?.id ?? null,
       linkedVehicleLabel: garageVehicleMap.get(vehicle.linked_vehicle_id ?? "")?.label ?? null,
-      connectionId: connections[0]?.id ?? null
-    })),
+      connectionId: connections[0]?.id ?? null,
+      lastSyncedAt: telemetry?.captured_at ?? null,
+      odometerMiles: telemetry?.odometer_miles ?? null,
+      batteryOrFuelPercent:
+        typeof telemetry?.battery_or_fuel_percent === "number"
+          ? Number(telemetry.battery_or_fuel_percent)
+          : telemetry?.battery_or_fuel_percent
+            ? Number(telemetry.battery_or_fuel_percent)
+            : null,
+      latitude: telemetry?.latitude ?? null,
+      longitude: telemetry?.longitude ?? null,
+      telemetrySource: telemetry?.source ?? null
+    };
+  });
+
+  const freshVehicleCount = connectedVehicles.filter(
+    (vehicle) =>
+      vehicle.lastSyncedAt &&
+      now - new Date(vehicle.lastSyncedAt).getTime() <= freshWindowMs
+  ).length;
+  const lastSyncedAt = connectedVehicles
+    .map((vehicle) => vehicle.lastSyncedAt)
+    .filter((value): value is string => Boolean(value))
+    .sort((left, right) => right.localeCompare(left))[0] ?? null;
+  const latestConnection = [...connections].sort((left, right) => right.updated_at.localeCompare(left.updated_at))[0];
+
+  return {
+    connectionCount: connections.length,
+    linkedCount: connectedVehicles.filter((vehicle) => vehicle.linkedVehicleId).length,
+    freshVehicleCount,
+    lastSyncedAt,
+    lastSyncStatus: String(latestConnection?.metadata?.last_sync_status ?? latestConnection?.status ?? ""),
+    lastSyncError: latestConnection?.metadata?.last_sync_error
+      ? String(latestConnection.metadata.last_sync_error)
+      : null,
+    connectedVehicles,
     garageVehicles: (garageVehicles ?? []).map((vehicle) => ({
       id: vehicle.slug,
       label: [vehicle.year, vehicle.make, vehicle.model].filter(Boolean).join(" ")
+    }))
+  };
+}
+
+export async function getVehicleTelemetryInsightsForUser(userId?: string | null, vehicleSlug?: string | null) {
+  if (!userId || !vehicleSlug || !canUseDatabase()) {
+    return null;
+  }
+
+  const vehicle = await assertVehicleAccess(userId, vehicleSlug);
+  const supabase = createSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("telemetry_snapshots")
+    .select("captured_at, odometer_miles, battery_or_fuel_percent, latitude, longitude, ignition_on, source")
+    .eq("vehicle_id", vehicle.id)
+    .order("captured_at", { ascending: false })
+    .limit(5);
+
+  if (error || !data || data.length === 0) {
+    return null;
+  }
+
+  const latest = data[0];
+  const previous = data[1] ?? null;
+  const lastSyncAgeMs = Date.now() - new Date(latest.captured_at).getTime();
+
+  return {
+    lastSyncedAt: latest.captured_at,
+    source: latest.source,
+    freshness: lastSyncAgeMs <= 24 * 60 * 60 * 1000 ? "fresh" as const : "stale" as const,
+    movementMiles:
+      previous && typeof latest.odometer_miles === "number" && typeof previous.odometer_miles === "number"
+        ? latest.odometer_miles - previous.odometer_miles
+        : null,
+    hasLocation:
+      Boolean(latest.latitude || latest.longitude),
+    history: data.map((row) => ({
+      capturedAt: row.captured_at,
+      odometerMiles: row.odometer_miles,
+      batteryOrFuelPercent: Number(row.battery_or_fuel_percent),
+      latitude: Number(row.latitude),
+      longitude: Number(row.longitude),
+      ignitionOn: row.ignition_on,
+      source: row.source
     }))
   };
 }
@@ -1636,35 +1911,204 @@ export async function syncSmartcarConnectionForUser(userId: string, connectionId
     throw providerVehiclesError;
   }
 
-  for (const providerVehicle of providerVehicles ?? []) {
-    const [odometerResult, locationResult, batteryResult, fuelResult] = await Promise.allSettled([
-      fetchSmartcarOdometer(connection.access_token, providerVehicle.smartcar_vehicle_id),
-      fetchSmartcarLocation(connection.access_token, providerVehicle.smartcar_vehicle_id),
-      fetchSmartcarBattery(connection.access_token, providerVehicle.smartcar_vehicle_id),
-      fetchSmartcarFuel(connection.access_token, providerVehicle.smartcar_vehicle_id)
-    ]);
+  let successfulSyncs = 0;
 
-    const odometer =
-      odometerResult.status === "fulfilled" ? Math.round(odometerResult.value.distance ?? 0) : 0;
-    const latitude = locationResult.status === "fulfilled" ? locationResult.value.latitude ?? 0 : 0;
-    const longitude = locationResult.status === "fulfilled" ? locationResult.value.longitude ?? 0 : 0;
-    const batteryPercent =
-      batteryResult.status === "fulfilled" ? Number((batteryResult.value.percentRemaining ?? 0) * 100) : null;
-    const fuelPercent =
-      fuelResult.status === "fulfilled" ? Number((fuelResult.value.percentRemaining ?? 0) * 100) : null;
+  try {
+    for (const providerVehicle of providerVehicles ?? []) {
+      const [odometerResult, locationResult, batteryResult, fuelResult] = await Promise.allSettled([
+        fetchSmartcarOdometer(connection.access_token, providerVehicle.smartcar_vehicle_id),
+        fetchSmartcarLocation(connection.access_token, providerVehicle.smartcar_vehicle_id),
+        fetchSmartcarBattery(connection.access_token, providerVehicle.smartcar_vehicle_id),
+        fetchSmartcarFuel(connection.access_token, providerVehicle.smartcar_vehicle_id)
+      ]);
 
-    await supabase.from("telemetry_snapshots").insert({
-      vehicle_id: providerVehicle.linked_vehicle_id,
-      captured_at: new Date().toISOString(),
-      odometer_miles: odometer,
-      battery_or_fuel_percent: batteryPercent ?? fuelPercent ?? 0,
-      latitude,
-      longitude,
-      speed_mph: 0,
-      ignition_on: false,
-      source: "smartcar-live"
-    });
+      const odometer =
+        odometerResult.status === "fulfilled" ? Math.round(odometerResult.value.distance ?? 0) : 0;
+      const latitude = locationResult.status === "fulfilled" ? locationResult.value.latitude ?? 0 : 0;
+      const longitude = locationResult.status === "fulfilled" ? locationResult.value.longitude ?? 0 : 0;
+      const batteryPercent =
+        batteryResult.status === "fulfilled" ? Number((batteryResult.value.percentRemaining ?? 0) * 100) : null;
+      const fuelPercent =
+        fuelResult.status === "fulfilled" ? Number((fuelResult.value.percentRemaining ?? 0) * 100) : null;
+
+      await supabase.from("telemetry_snapshots").insert({
+        vehicle_id: providerVehicle.linked_vehicle_id,
+        captured_at: new Date().toISOString(),
+        odometer_miles: odometer,
+        battery_or_fuel_percent: batteryPercent ?? fuelPercent ?? 0,
+        latitude,
+        longitude,
+        speed_mph: 0,
+        ignition_on: false,
+        source: "smartcar-live"
+      });
+
+      successfulSyncs += 1;
+    }
+
+    await supabase
+      .from("provider_connections")
+      .update({
+        updated_at: new Date().toISOString(),
+        metadata: {
+          last_sync_status: "synced",
+          last_sync_at: new Date().toISOString(),
+          last_sync_error: null,
+          successful_vehicle_syncs: successfulSyncs
+        }
+      })
+      .eq("id", connection.id);
+  } catch (error) {
+    await supabase
+      .from("provider_connections")
+      .update({
+        updated_at: new Date().toISOString(),
+        metadata: {
+          last_sync_status: "error",
+          last_sync_at: new Date().toISOString(),
+          last_sync_error: error instanceof Error ? error.message : "Smartcar sync failed",
+          successful_vehicle_syncs: successfulSyncs
+        }
+      })
+      .eq("id", connection.id);
+
+    throw error;
   }
+}
+
+async function syncLinkedSmartcarVehicle(
+  providerConnectionId: string,
+  accessToken: string,
+  smartcarVehicleId: string,
+  linkedVehicleId: string
+) {
+  const supabase = createSupabaseAdminClient();
+  const [odometerResult, locationResult, batteryResult, fuelResult] = await Promise.allSettled([
+    fetchSmartcarOdometer(accessToken, smartcarVehicleId),
+    fetchSmartcarLocation(accessToken, smartcarVehicleId),
+    fetchSmartcarBattery(accessToken, smartcarVehicleId),
+    fetchSmartcarFuel(accessToken, smartcarVehicleId)
+  ]);
+
+  const odometer = odometerResult.status === "fulfilled" ? Math.round(odometerResult.value.distance ?? 0) : 0;
+  const latitude = locationResult.status === "fulfilled" ? locationResult.value.latitude ?? 0 : 0;
+  const longitude = locationResult.status === "fulfilled" ? locationResult.value.longitude ?? 0 : 0;
+  const batteryPercent =
+    batteryResult.status === "fulfilled" ? Number((batteryResult.value.percentRemaining ?? 0) * 100) : null;
+  const fuelPercent =
+    fuelResult.status === "fulfilled" ? Number((fuelResult.value.percentRemaining ?? 0) * 100) : null;
+
+  await supabase.from("telemetry_snapshots").insert({
+    vehicle_id: linkedVehicleId,
+    captured_at: new Date().toISOString(),
+    odometer_miles: odometer,
+    battery_or_fuel_percent: batteryPercent ?? fuelPercent ?? 0,
+    latitude,
+    longitude,
+    speed_mph: 0,
+    ignition_on: false,
+    source: "smartcar-live"
+  });
+
+  await supabase
+    .from("provider_connections")
+    .update({
+      updated_at: new Date().toISOString(),
+      metadata: {
+        last_sync_status: "synced",
+        last_sync_at: new Date().toISOString(),
+        last_sync_error: null,
+        sync_source: "smartcar-webhook",
+        synced_vehicle_id: smartcarVehicleId
+      }
+    })
+    .eq("id", providerConnectionId);
+}
+
+export async function syncSmartcarVehicleFromWebhook(smartcarVehicleId: string) {
+  if (!canUseDatabase()) {
+    throw new Error("Database is not configured");
+  }
+
+  const supabase = createSupabaseAdminClient();
+  const { data: providerVehicle, error } = await supabase
+    .from("provider_vehicles")
+    .select("provider_connection_id, smartcar_vehicle_id, linked_vehicle_id")
+    .eq("smartcar_vehicle_id", smartcarVehicleId)
+    .not("linked_vehicle_id", "is", null)
+    .maybeSingle();
+
+  if (error || !providerVehicle || !providerVehicle.linked_vehicle_id) {
+    return;
+  }
+
+  const { data: connection, error: connectionError } = await supabase
+    .from("provider_connections")
+    .select("id, access_token")
+    .eq("id", providerVehicle.provider_connection_id)
+    .eq("provider", "smartcar")
+    .eq("status", "active")
+    .maybeSingle();
+
+  if (connectionError || !connection) {
+    return;
+  }
+
+  try {
+    await syncLinkedSmartcarVehicle(
+      providerVehicle.provider_connection_id,
+      connection.access_token,
+      providerVehicle.smartcar_vehicle_id,
+      providerVehicle.linked_vehicle_id
+    );
+  } catch (syncError) {
+    await supabase
+      .from("provider_connections")
+      .update({
+        updated_at: new Date().toISOString(),
+        metadata: {
+          last_sync_status: "error",
+          last_sync_at: new Date().toISOString(),
+          last_sync_error: syncError instanceof Error ? syncError.message : "Webhook sync failed",
+          sync_source: "smartcar-webhook",
+          synced_vehicle_id: smartcarVehicleId
+        }
+      })
+      .eq("id", providerVehicle.provider_connection_id);
+
+    throw syncError;
+  }
+}
+
+export async function markSmartcarVehicleWebhookError(smartcarVehicleId: string, errorMessage: string) {
+  if (!canUseDatabase()) {
+    return;
+  }
+
+  const supabase = createSupabaseAdminClient();
+  const { data: providerVehicle } = await supabase
+    .from("provider_vehicles")
+    .select("provider_connection_id")
+    .eq("smartcar_vehicle_id", smartcarVehicleId)
+    .maybeSingle();
+
+  if (!providerVehicle) {
+    return;
+  }
+
+  await supabase
+    .from("provider_connections")
+    .update({
+      updated_at: new Date().toISOString(),
+      metadata: {
+        last_sync_status: "vehicle_error",
+        last_sync_at: new Date().toISOString(),
+        last_sync_error: errorMessage,
+        sync_source: "smartcar-webhook",
+        synced_vehicle_id: smartcarVehicleId
+      }
+    })
+    .eq("id", providerVehicle.provider_connection_id);
 }
 
 async function getVehicleRowForUser(userId: string, vehicleSlug: string) {

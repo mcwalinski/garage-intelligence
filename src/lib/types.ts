@@ -85,6 +85,11 @@ export interface Vehicle {
   image: string;
   sourceUrl?: string | null;
   watchNotes?: string | null;
+  lifecycleNotes?: string | null;
+  acquisitionDate?: string | null;
+  dispositionDate?: string | null;
+  purchasePriceUsd?: number | null;
+  salePriceUsd?: number | null;
   targetPriceUsd?: number | null;
   targetMileage?: number | null;
   telemetry: TelemetrySnapshot;

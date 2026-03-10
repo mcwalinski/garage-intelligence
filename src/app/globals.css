@@ -383,6 +383,33 @@ label {
   gap: 18px;
 }
 
+.public-feature-grid,
+.public-cta-grid {
+  display: grid;
+  gap: 18px;
+}
+
+.public-feature-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.public-cta-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.public-feature-grid h3,
+.public-cta-grid h3 {
+  margin: 0 0 10px;
+  font-size: 1.25rem;
+  letter-spacing: -0.03em;
+}
+
+.public-feature-grid p,
+.public-cta-grid p {
+  margin: 0;
+  line-height: 1.7;
+}
+
 .video-feed-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -489,6 +516,31 @@ label {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+}
+
+.garage-filter-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.garage-sort-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.garage-sort-control select {
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--text);
+  font: inherit;
 }
 
 .garage-filter-tab {
@@ -685,6 +737,48 @@ label {
   background-position: center;
   background-size: cover;
   background-color: #dbe6f2;
+}
+
+.location-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.location-preview-card {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #fff;
+}
+
+.location-preview-card__map {
+  display: block;
+  min-height: 180px;
+  background-position: center;
+  background-size: cover;
+  background-color: #dbe6f2;
+}
+
+.location-preview-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+}
+
+.location-preview-card__body p,
+.location-preview-card__body strong {
+  margin: 0;
+}
+
+.location-preview-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 6px;
 }
 
 .research-video-card__body {
@@ -1072,6 +1166,9 @@ label {
 
   .home-actions-grid,
   .watchlist-grid,
+  .public-feature-grid,
+  .public-cta-grid,
+  .location-preview-grid,
   .video-feed-grid,
   .home-split,
   .detail-layout {
@@ -1096,6 +1193,8 @@ label {
   .vehicle-grid,
   .home-actions-grid,
   .watchlist-grid,
+  .public-feature-grid,
+  .public-cta-grid,
   .video-feed-grid,
   .detail-grid,
   .detail-nav-grid,
@@ -1107,6 +1206,7 @@ label {
   .section-heading,
   .sticky-topbar,
   .sticky-topbar__nav,
+  .garage-filter-toolbar,
   .vehicle-card__heading,
   .watch-card__header,
   .research-video-card,

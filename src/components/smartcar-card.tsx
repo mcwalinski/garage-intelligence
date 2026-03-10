@@ -3,6 +3,11 @@ import { linkSmartcarVehicleAction, syncSmartcarConnectionAction } from "@/app/i
 
 interface SmartcarCardProps {
   connectionCount: number;
+  linkedCount: number;
+  freshVehicleCount: number;
+  lastSyncedAt: string | null;
+  lastSyncStatus: string | null;
+  lastSyncError: string | null;
   connectedVehicles: Array<{
     id: string;
     make: string;
@@ -11,6 +16,12 @@ interface SmartcarCardProps {
     linkedVehicleId: string | null;
     linkedVehicleLabel: string | null;
     connectionId: string | null;
+    lastSyncedAt: string | null;
+    odometerMiles: number | null;
+    batteryOrFuelPercent: number | null;
+    latitude: number | null;
+    longitude: number | null;
+    telemetrySource: string | null;
   }>;
   garageVehicles: Array<{ id: string; label: string }>;
   disabled?: boolean;
@@ -19,6 +30,11 @@ interface SmartcarCardProps {
 
 export function SmartcarCard({
   connectionCount,
+  linkedCount,
+  freshVehicleCount,
+  lastSyncedAt,
+  lastSyncStatus,
+  lastSyncError,
   connectedVehicles,
   garageVehicles,
   disabled = false,
@@ -41,7 +57,17 @@ export function SmartcarCard({
         <div className="smartcar-card__header">
           <div>
             <strong>{connectionCount > 0 ? `${connectionCount} Smartcar connection${connectionCount === 1 ? "" : "s"}` : "No Smartcar connection yet"}</strong>
-            <p className="helper-text">Priority brands: Jeep, GMC, Chevy, Rivian, Tesla</p>
+            <p className="helper-text">
+              {linkedCount > 0
+                ? `${linkedCount} linked vehicle${linkedCount === 1 ? "" : "s"} · ${freshVehicleCount} fresh in the last 24h${lastSyncedAt ? ` · last sync ${lastSyncedAt.slice(0, 16).replace("T", " ")}` : ""}`
+                : "Priority brands: Jeep, GMC, Chevy, Rivian, Tesla"}
+            </p>
+            {lastSyncStatus ? (
+              <p className="helper-text">
+                Sync status: {lastSyncStatus}
+                {lastSyncError ? ` · ${lastSyncError}` : ""}
+              </p>
+            ) : null}
           </div>
           <div className="smartcar-card__actions">
             {firstConnectionId && !disabled ? (
@@ -74,6 +100,13 @@ export function SmartcarCard({
                       ? `Linked to ${vehicle.linkedVehicleLabel}`
                       : "Imported from Smartcar provider discovery"}
                   </p>
+                  {vehicle.linkedVehicleId ? (
+                    <p className="helper-text">
+                      {vehicle.lastSyncedAt ? `Synced ${vehicle.lastSyncedAt.slice(0, 16).replace("T", " ")}` : "No synced telemetry yet"}
+                      {vehicle.odometerMiles !== null ? ` · ${vehicle.odometerMiles.toLocaleString()} mi` : ""}
+                      {vehicle.batteryOrFuelPercent !== null ? ` · ${Math.round(vehicle.batteryOrFuelPercent)}% energy` : ""}
+                    </p>
+                  ) : null}
                   {!vehicle.linkedVehicleId && !disabled ? (
                     <form action={linkSmartcarVehicleAction} className="smartcar-link-form">
                       <input type="hidden" name="providerVehicleId" value={vehicle.id} />
@@ -93,9 +126,20 @@ export function SmartcarCard({
                     </form>
                   ) : null}
                 </div>
-                <span className={`status-pill ${vehicle.linkedVehicleId ? "status-live" : "status-upcoming"}`}>
-                  {vehicle.linkedVehicleId ? "Linked" : "Needs link"}
-                </span>
+                <div className="task-row__meta">
+                  <span
+                    className={`status-pill ${
+                      vehicle.linkedVehicleId
+                        ? vehicle.lastSyncedAt
+                          ? "status-live"
+                          : "status-upcoming"
+                        : "status-upcoming"
+                    }`}
+                  >
+                    {vehicle.linkedVehicleId ? (vehicle.lastSyncedAt ? "Linked + synced" : "Linked") : "Needs link"}
+                  </span>
+                  {vehicle.latitude !== null && vehicle.longitude !== null ? <small>Location available</small> : null}
+                </div>
               </div>
             ))}
           </div>

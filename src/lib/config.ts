@@ -9,6 +9,7 @@ type OptionalServerEnvKey =
   | "SMARTCAR_CLIENT_ID"
   | "SMARTCAR_CLIENT_SECRET"
   | "SMARTCAR_REDIRECT_URI"
+  | "SMARTCAR_MANAGEMENT_TOKEN"
   | "SMARTCAR_WEBHOOK_SECRET"
   | "MARKETCHECK_API_KEY"
   | "MARKETCHECK_CLIENT_SECRET"
@@ -64,6 +65,7 @@ export const appConfig = {
     smartcarClientId: readEnv("SMARTCAR_CLIENT_ID"),
     smartcarClientSecret: readEnv("SMARTCAR_CLIENT_SECRET"),
     smartcarRedirectUri: readEnv("SMARTCAR_REDIRECT_URI"),
+    smartcarManagementToken: readEnv("SMARTCAR_MANAGEMENT_TOKEN"),
     smartcarWebhookSecret: readEnv("SMARTCAR_WEBHOOK_SECRET"),
     marketCheckApiKey: readEnv("MARKETCHECK_API_KEY"),
     marketCheckClientSecret: readEnv("MARKETCHECK_CLIENT_SECRET"),

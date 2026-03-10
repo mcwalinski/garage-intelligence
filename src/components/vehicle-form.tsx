@@ -18,6 +18,11 @@ interface VehicleFormValues {
   image: string;
   sourceUrl: string;
   watchNotes: string;
+  lifecycleNotes: string;
+  acquisitionDate: string;
+  dispositionDate: string;
+  purchasePriceUsd: string;
+  salePriceUsd: string;
   targetPriceUsd: string;
   targetMileage: string;
 }
@@ -55,6 +60,11 @@ const defaultValues: VehicleFormValues = {
   image: "",
   sourceUrl: "",
   watchNotes: "",
+  lifecycleNotes: "",
+  acquisitionDate: "",
+  dispositionDate: "",
+  purchasePriceUsd: "",
+  salePriceUsd: "",
   targetPriceUsd: "",
   targetMileage: ""
 };
@@ -277,6 +287,50 @@ export function VehicleForm({
           />
         </label>
         <label className="field">
+          <span>Acquired on</span>
+          <input
+            name="acquisitionDate"
+            type="date"
+            value={formValues.acquisitionDate}
+            onChange={(event) => updateField("acquisitionDate", event.target.value)}
+            disabled={disabled}
+          />
+        </label>
+        <label className="field">
+          <span>Sold / moved on</span>
+          <input
+            name="dispositionDate"
+            type="date"
+            value={formValues.dispositionDate}
+            onChange={(event) => updateField("dispositionDate", event.target.value)}
+            disabled={disabled}
+          />
+        </label>
+        <label className="field">
+          <span>Purchase price</span>
+          <input
+            name="purchasePriceUsd"
+            type="number"
+            min="0"
+            value={formValues.purchasePriceUsd}
+            onChange={(event) => updateField("purchasePriceUsd", event.target.value)}
+            placeholder="Optional"
+            disabled={disabled}
+          />
+        </label>
+        <label className="field">
+          <span>Sale price</span>
+          <input
+            name="salePriceUsd"
+            type="number"
+            min="0"
+            value={formValues.salePriceUsd}
+            onChange={(event) => updateField("salePriceUsd", event.target.value)}
+            placeholder="Optional"
+            disabled={disabled}
+          />
+        </label>
+        <label className="field">
           <span>Target price</span>
           <input
             name="targetPriceUsd"
@@ -307,6 +361,16 @@ export function VehicleForm({
             value={formValues.watchNotes}
             onChange={(event) => updateField("watchNotes", event.target.value)}
             placeholder="Ownership history, target spec, seller notes, or acquisition plan"
+            disabled={disabled}
+          />
+        </label>
+        <label className="field field--wide">
+          <span>Lifecycle notes</span>
+          <input
+            name="lifecycleNotes"
+            value={formValues.lifecycleNotes}
+            onChange={(event) => updateField("lifecycleNotes", event.target.value)}
+            placeholder="Acquisition story, sale context, ownership highlights, or what to remember"
             disabled={disabled}
           />
         </label>

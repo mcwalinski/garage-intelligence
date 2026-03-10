@@ -34,6 +34,11 @@ export async function addVehicleAction(formData: FormData) {
   const image = readTrimmed(formData, "image");
   const sourceUrl = readTrimmed(formData, "sourceUrl");
   const watchNotes = readTrimmed(formData, "watchNotes");
+  const lifecycleNotes = readTrimmed(formData, "lifecycleNotes");
+  const acquisitionDate = readTrimmed(formData, "acquisitionDate");
+  const dispositionDate = readTrimmed(formData, "dispositionDate");
+  const purchasePriceUsdRaw = readTrimmed(formData, "purchasePriceUsd");
+  const salePriceUsdRaw = readTrimmed(formData, "salePriceUsd");
   const targetPriceUsdRaw = readTrimmed(formData, "targetPriceUsd");
   const targetMileageRaw = readTrimmed(formData, "targetMileage");
   const powertrain = readTrimmed(formData, "powertrain") as Powertrain;
@@ -41,6 +46,8 @@ export async function addVehicleAction(formData: FormData) {
   const year = Number(yearRaw);
   const targetPriceUsd = targetPriceUsdRaw ? Number(targetPriceUsdRaw) : null;
   const targetMileage = targetMileageRaw ? Number(targetMileageRaw) : null;
+  const purchasePriceUsd = purchasePriceUsdRaw ? Number(purchasePriceUsdRaw) : null;
+  const salePriceUsd = salePriceUsdRaw ? Number(salePriceUsdRaw) : null;
 
   if (!nickname || !make || !model || !trim || !Number.isInteger(year)) {
     redirect("/?formError=Missing%20required%20vehicle%20fields");
@@ -66,6 +73,10 @@ export async function addVehicleAction(formData: FormData) {
     redirect("/?formError=Target%20price%20and%20target%20mileage%20must%20be%20numeric");
   }
 
+  if ((purchasePriceUsdRaw && Number.isNaN(purchasePriceUsd)) || (salePriceUsdRaw && Number.isNaN(salePriceUsd))) {
+    redirect("/?formError=Purchase%20and%20sale%20prices%20must%20be%20numeric");
+  }
+
   const slug = await createVehicleForUser(user.id, {
     nickname,
     year,
@@ -78,6 +89,11 @@ export async function addVehicleAction(formData: FormData) {
     image,
     sourceUrl,
     watchNotes,
+    lifecycleNotes,
+    acquisitionDate: acquisitionDate || null,
+    dispositionDate: dispositionDate || null,
+    purchasePriceUsd,
+    salePriceUsd,
     targetPriceUsd,
     targetMileage
   });
@@ -105,6 +121,11 @@ export async function updateVehicleAction(formData: FormData) {
   const image = readTrimmed(formData, "image");
   const sourceUrl = readTrimmed(formData, "sourceUrl");
   const watchNotes = readTrimmed(formData, "watchNotes");
+  const lifecycleNotes = readTrimmed(formData, "lifecycleNotes");
+  const acquisitionDate = readTrimmed(formData, "acquisitionDate");
+  const dispositionDate = readTrimmed(formData, "dispositionDate");
+  const purchasePriceUsdRaw = readTrimmed(formData, "purchasePriceUsd");
+  const salePriceUsdRaw = readTrimmed(formData, "salePriceUsd");
   const targetPriceUsdRaw = readTrimmed(formData, "targetPriceUsd");
   const targetMileageRaw = readTrimmed(formData, "targetMileage");
   const powertrain = readTrimmed(formData, "powertrain") as Powertrain;
@@ -112,6 +133,8 @@ export async function updateVehicleAction(formData: FormData) {
   const year = Number(yearRaw);
   const targetPriceUsd = targetPriceUsdRaw ? Number(targetPriceUsdRaw) : null;
   const targetMileage = targetMileageRaw ? Number(targetMileageRaw) : null;
+  const purchasePriceUsd = purchasePriceUsdRaw ? Number(purchasePriceUsdRaw) : null;
+  const salePriceUsd = salePriceUsdRaw ? Number(salePriceUsdRaw) : null;
 
   if (!vehicleId || !nickname || !make || !model || !trim || !Number.isInteger(year)) {
     redirect("/?formError=Missing%20required%20vehicle%20fields");
@@ -137,6 +160,10 @@ export async function updateVehicleAction(formData: FormData) {
     redirect("/?formError=Target%20price%20and%20target%20mileage%20must%20be%20numeric");
   }
 
+  if ((purchasePriceUsdRaw && Number.isNaN(purchasePriceUsd)) || (salePriceUsdRaw && Number.isNaN(salePriceUsd))) {
+    redirect("/?formError=Purchase%20and%20sale%20prices%20must%20be%20numeric");
+  }
+
   const slug = await updateVehicleForUser(user.id, vehicleId, {
     nickname,
     year,
@@ -149,6 +176,11 @@ export async function updateVehicleAction(formData: FormData) {
     image,
     sourceUrl,
     watchNotes,
+    lifecycleNotes,
+    acquisitionDate: acquisitionDate || null,
+    dispositionDate: dispositionDate || null,
+    purchasePriceUsd,
+    salePriceUsd,
     targetPriceUsd,
     targetMileage
   });

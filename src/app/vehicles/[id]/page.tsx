@@ -10,7 +10,8 @@ import { searchVehiclePartsAction } from "@/app/integrations/marketplaces/action
 import { refreshVehicleValuationAction } from "@/app/integrations/marketcheck/actions";
 import { DeleteVehicleButton } from "@/components/delete-vehicle-button";
 import { getAuthenticatedUser } from "@/lib/auth";
-import { getVehicle, listVehicles } from "@/lib/dashboard";
+import { getVehicle, getVehicleTelemetryInsightsForUser, listVehicles } from "@/lib/dashboard";
+import { formatCoordinate, getGoogleMapsUrl, getOpenStreetMapUrl, getStaticMapUrl, hasUsableCoordinates } from "@/lib/maps";
 import { getVehicleResearch } from "@/lib/research";
 import { getWatchOpportunity } from "@/lib/watchlist";
 
@@ -34,11 +35,15 @@ export default async function VehiclePage({
   }
 
   const research = await getVehicleResearch(vehicle);
-
+  const isWatching = vehicle.ownershipStatus === "watching";
+  const isOwned = vehicle.ownershipStatus === "owned";
+  const telemetryInsights = !isWatching ? await getVehicleTelemetryInsightsForUser(userId, id) : null;
   const latestValue = vehicle.valuationHistory[vehicle.valuationHistory.length - 1];
   const dueTasks = vehicle.maintenance.filter((task) => task.status === "due" || task.status === "overdue").length;
+  const completedTasks = [...vehicle.maintenance]
+    .filter((task) => task.completedAt)
+    .sort((left, right) => (right.completedAt ?? "").localeCompare(left.completedAt ?? ""));
   const latestAlert = vehicle.alerts[0] ?? null;
-  const isWatching = vehicle.ownershipStatus === "watching";
   const watchOpportunity = isWatching ? getWatchOpportunity(vehicle) : null;
   const ownershipLabel =
     vehicle.ownershipStatus === "own" ? "Own" : vehicle.ownershipStatus === "owned" ? "Owned" : "Watching";
@@ -111,7 +116,9 @@ export default async function VehiclePage({
           </div>
           <div>
             <span>{isWatching ? "Decision read" : "Service due"}</span>
-            <strong>{isWatching ? watchOpportunity?.summary ?? "Set targets" : dueTasks}</strong>
+            <strong>
+              {isWatching ? watchOpportunity?.summary ?? "Set targets" : isOwned ? completedTasks.length : dueTasks}
+            </strong>
           </div>
         </div>
       </section>
@@ -137,12 +144,43 @@ export default async function VehiclePage({
                   <li>{watchOpportunity?.mileage.label ?? "Set a target mileage to screen cleaner examples."}</li>
                 </ul>
               </div>
+            ) : isOwned ? (
+              <div className="card">
+                <span className="eyebrow">Ownership history</span>
+                <h2>Vehicle record</h2>
+                <ul className="detail-list">
+                  <li>Acquired: {vehicle.acquisitionDate ?? "Not recorded"}</li>
+                  <li>Moved on: {vehicle.dispositionDate ?? "Still retained in archive"}</li>
+                  <li>
+                    Purchase price:{" "}
+                    {vehicle.purchasePriceUsd ? `$${vehicle.purchasePriceUsd.toLocaleString()}` : "Not recorded"}
+                  </li>
+                  <li>
+                    Sale price: {vehicle.salePriceUsd ? `$${vehicle.salePriceUsd.toLocaleString()}` : "Not recorded"}
+                  </li>
+                  <li>{vehicle.lifecycleNotes ?? "Add notes for why you bought it, how it served, and why it left."}</li>
+                </ul>
+              </div>
             ) : (
               <div className="card">
                 <span className="eyebrow">Telemetry</span>
                 <h2>Current vehicle state</h2>
                 <ul className="detail-list">
                   <li>Captured: {vehicle.telemetry.capturedAt}</li>
+                  <li>
+                    Smartcar freshness:{" "}
+                    {telemetryInsights
+                      ? telemetryInsights.freshness === "fresh"
+                        ? "Fresh in the last 24h"
+                        : "Stale, sync again"
+                      : "Unknown"}
+                  </li>
+                  <li>
+                    Movement since prior sync:{" "}
+                    {telemetryInsights?.movementMiles !== null && telemetryInsights?.movementMiles !== undefined
+                      ? `${telemetryInsights.movementMiles.toLocaleString()} mi`
+                      : "Not enough history yet"}
+                  </li>
                   <li>Ignition: {vehicle.telemetry.ignitionOn ? "On" : "Off"}</li>
                   <li>Speed: {vehicle.telemetry.speedMph} mph</li>
                   <li>
@@ -192,6 +230,65 @@ export default async function VehiclePage({
           </div>
 
           <div className="detail-stack">
+            {!isWatching && !isOwned && telemetryInsights?.history?.length ? (
+              <div className="card">
+                <span className="eyebrow">Telemetry history</span>
+                <h2>Recent Smartcar snapshots</h2>
+                <div className="trend-list">
+                  {telemetryInsights.history.slice(0, 5).map((snapshot) => (
+                    <div key={snapshot.capturedAt} className="trend-row">
+                      <div>
+                        <strong>{snapshot.capturedAt.slice(0, 16).replace("T", " ")}</strong>
+                        <span>
+                          {snapshot.odometerMiles.toLocaleString()} mi
+                          {snapshot.batteryOrFuelPercent ? ` · ${Math.round(snapshot.batteryOrFuelPercent)}% energy` : ""}
+                          {snapshot.latitude || snapshot.longitude ? " · location available" : ""}
+                        </span>
+                      </div>
+                      <span className="status-pill status-live">{snapshot.source}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {!isWatching && !isOwned && telemetryInsights?.history?.some((snapshot) => hasUsableCoordinates(snapshot.latitude, snapshot.longitude)) ? (
+              <div className="card">
+                <span className="eyebrow">Location context</span>
+                <h2>Recent places</h2>
+                <div className="location-preview-grid">
+                  {telemetryInsights.history
+                    .filter((snapshot) => hasUsableCoordinates(snapshot.latitude, snapshot.longitude))
+                    .slice(0, 3)
+                    .map((snapshot) => (
+                      <div key={`${snapshot.capturedAt}-map`} className="location-preview-card">
+                        <a
+                          href={getOpenStreetMapUrl(snapshot.latitude, snapshot.longitude)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="location-preview-card__map"
+                          style={{ backgroundImage: `url(${getStaticMapUrl(snapshot.latitude, snapshot.longitude)})` }}
+                        />
+                        <div className="location-preview-card__body">
+                          <strong>{snapshot.capturedAt.slice(0, 16).replace("T", " ")}</strong>
+                          <p>
+                            {formatCoordinate(snapshot.latitude)}, {formatCoordinate(snapshot.longitude)}
+                          </p>
+                          <div className="location-preview-card__actions">
+                            <a href={getOpenStreetMapUrl(snapshot.latitude, snapshot.longitude)} target="_blank" rel="noreferrer" className="button button--ghost">
+                              OpenStreetMap
+                            </a>
+                            <a href={getGoogleMapsUrl(snapshot.latitude, snapshot.longitude)} target="_blank" rel="noreferrer" className="button button--ghost">
+                              Google Maps
+                            </a>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            ) : null}
+
             <div className="card">
               {isWatching ? (
                 <>
@@ -247,6 +344,54 @@ export default async function VehiclePage({
                         </Link>
                       </div>
                     </div>
+                  </div>
+                </>
+              ) : isOwned ? (
+                <>
+                  <span className="eyebrow">Archive</span>
+                  <h2>Ownership timeline</h2>
+                  <div className="stack">
+                    {vehicle.acquisitionDate ? (
+                      <div className="task-row">
+                        <div>
+                          <strong>Acquired</strong>
+                          <p>
+                            {vehicle.purchasePriceUsd
+                              ? `Bought on ${vehicle.acquisitionDate} for $${vehicle.purchasePriceUsd.toLocaleString()}.`
+                              : `Bought on ${vehicle.acquisitionDate}.`}
+                          </p>
+                        </div>
+                      </div>
+                    ) : null}
+                    {completedTasks.slice(0, 5).map((task) => (
+                      <div key={task.id} className="task-row">
+                        <div>
+                          <strong>{task.title}</strong>
+                          <p>
+                            Completed {task.completedAt}
+                            {task.completedMileage ? ` · ${task.completedMileage.toLocaleString()} mi` : ""}
+                          </p>
+                        </div>
+                        <div className="task-row__meta">
+                          <span className="status-pill status-live">{task.category}</span>
+                        </div>
+                      </div>
+                    ))}
+                    {vehicle.dispositionDate ? (
+                      <div className="task-row">
+                        <div>
+                          <strong>Moved on</strong>
+                          <p>
+                            {vehicle.salePriceUsd
+                              ? `Sold or moved on ${vehicle.dispositionDate} for $${vehicle.salePriceUsd.toLocaleString()}.`
+                              : `Moved on ${vehicle.dispositionDate}.`}
+                          </p>
+                        </div>
+                      </div>
+                    ) : null}
+                    {!vehicle.acquisitionDate && completedTasks.length === 0 && !vehicle.dispositionDate ? (
+                      <p className="empty-state">Add lifecycle dates, prices, or completed service items to build the archive timeline.</p>
+                    ) : null}
                   </div>
                 </>
               ) : (
@@ -530,9 +675,7 @@ export default async function VehiclePage({
                   ))}
                 </div>
               ) : (
-                <p className="empty-state">
-                  No recent feed videos matched this vehicle. Older reviews can still exist on the source channels.
-                </p>
+                <p className="empty-state">No channel videos matched this vehicle yet.</p>
               )}
             </div>
           </div>
@@ -562,9 +705,27 @@ export default async function VehiclePage({
                     ? watchOpportunity?.summary ?? "Set targets"
                     : vehicle.ownershipStatus === "own"
                       ? vehicle.alerts.length
-                      : 0}
+                      : completedTasks.length}
                 </strong>
               </div>
+              {telemetryInsights?.lastSyncedAt ? (
+                <div>
+                  <span>Last sync</span>
+                  <strong>{telemetryInsights.lastSyncedAt.slice(0, 16).replace("T", " ")}</strong>
+                </div>
+              ) : null}
+              {vehicle.acquisitionDate ? (
+                <div>
+                  <span>Acquired</span>
+                  <strong>{vehicle.acquisitionDate}</strong>
+                </div>
+              ) : null}
+              {vehicle.dispositionDate ? (
+                <div>
+                  <span>Moved on</span>
+                  <strong>{vehicle.dispositionDate}</strong>
+                </div>
+              ) : null}
               <div>
                 <span>Marketplace results</span>
                 <strong>{vehicle.parts.length}</strong>
@@ -583,6 +744,7 @@ export default async function VehiclePage({
               ) : null}
             </div>
             {vehicle.watchNotes ? <p className="helper-text">{vehicle.watchNotes}</p> : null}
+            {vehicle.lifecycleNotes ? <p className="helper-text">{vehicle.lifecycleNotes}</p> : null}
             {vehicle.sourceUrl ? (
               <a href={vehicle.sourceUrl} target="_blank" rel="noreferrer" className="button button--ghost">
                 Open source listing

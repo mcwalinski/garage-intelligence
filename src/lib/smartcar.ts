@@ -1,3 +1,5 @@
+import { createHmac } from "node:crypto";
+
 interface SmartcarTokenResponse {
   access_token: string;
   refresh_token?: string;
@@ -160,4 +162,27 @@ export function computeExpiryDate(expiresInSeconds?: number) {
   }
 
   return new Date(Date.now() + expiresInSeconds * 1000).toISOString();
+}
+
+function getSmartcarManagementToken() {
+  return process.env.SMARTCAR_MANAGEMENT_TOKEN || process.env.SMARTCAR_WEBHOOK_SECRET || "";
+}
+
+export function verifySmartcarWebhookSignature(payload: string, signature: string | null) {
+  const managementToken = getSmartcarManagementToken();
+  if (!managementToken || !signature) {
+    return false;
+  }
+
+  const digest = createHmac("sha256", managementToken).update(payload).digest("base64");
+  return digest === signature;
+}
+
+export function buildSmartcarVerifyChallenge(challenge: string) {
+  const managementToken = getSmartcarManagementToken();
+  if (!managementToken) {
+    throw new Error("Smartcar management token is not configured");
+  }
+
+  return createHmac("sha256", managementToken).update(challenge).digest("hex");
 }

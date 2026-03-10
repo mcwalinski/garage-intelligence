@@ -11,6 +11,8 @@ export interface WatchOpportunity {
   price: WatchMetric;
   mileage: WatchMetric;
   summary: string;
+  score: number;
+  badge: "strong" | "close" | "monitor" | "needs-targets";
 }
 
 function getLatestValue(vehicle: Vehicle) {
@@ -104,7 +106,19 @@ export function getWatchOpportunity(vehicle: Vehicle): WatchOpportunity {
             ? "Still above target thresholds"
             : "Set target price or mileage to track this vehicle";
 
-  return { latestValue, price, mileage, summary };
+  const score =
+    (price.delta ?? 999_999) +
+    (mileage.delta ?? 999_999) / 100;
+  const badge =
+    !hasPriceTarget && !hasMileageTarget
+      ? "needs-targets"
+      : price.tone === "positive" && mileage.tone === "positive"
+        ? "strong"
+        : price.tone === "positive" || mileage.tone === "positive" || price.tone === "neutral" || mileage.tone === "neutral"
+          ? "close"
+          : "monitor";
+
+  return { latestValue, price, mileage, summary, score, badge };
 }
 
 export function sortWatchingVehicles(vehicles: Vehicle[]) {
@@ -115,10 +129,8 @@ export function sortWatchingVehicles(vehicles: Vehicle[]) {
     const rightPriceScore = rightOpportunity.price.delta ?? 1_000_000;
     const leftMileageScore = leftOpportunity.mileage.delta ?? 1_000_000;
     const rightMileageScore = rightOpportunity.mileage.delta ?? 1_000_000;
-    const leftScore =
-      leftPriceScore + leftMileageScore / 100;
-    const rightScore =
-      rightPriceScore + rightMileageScore / 100;
+    const leftScore = leftPriceScore + leftMileageScore / 100;
+    const rightScore = rightPriceScore + rightMileageScore / 100;
 
     return leftScore - rightScore;
   });

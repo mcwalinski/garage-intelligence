@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { bulkDeleteVehiclesAction } from "@/app/add-vehicle/actions";
+import { GarageSortKey, sortGarageVehicles } from "@/lib/garage";
 import { Vehicle } from "@/lib/types";
 import { getWatchOpportunity } from "@/lib/watchlist";
 
@@ -13,6 +14,14 @@ interface GarageBulkDeleteFormProps {
 }
 
 type GarageFilter = "all" | "own" | "owned" | "watching";
+const sortOptions: Array<{ key: GarageSortKey; label: string }> = [
+  { key: "recent", label: "Newest first" },
+  { key: "value-desc", label: "Highest value" },
+  { key: "alerts", label: "Most alerts" },
+  { key: "maintenance", label: "Most service due" },
+  { key: "watch-opportunity", label: "Best watch opportunities" },
+  { key: "year-desc", label: "Newest model year" }
+];
 
 export function GarageBulkDeleteForm({
   vehicles,
@@ -21,17 +30,18 @@ export function GarageBulkDeleteForm({
 }: GarageBulkDeleteFormProps) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [activeFilter, setActiveFilter] = useState<GarageFilter>("all");
+  const [sortKey, setSortKey] = useState<GarageSortKey>("recent");
   const groupedVehicles = useMemo(
     () => ({
-      own: vehicles.filter((vehicle) => vehicle.ownershipStatus === "own"),
-      owned: vehicles.filter((vehicle) => vehicle.ownershipStatus === "owned"),
-      watching: vehicles.filter((vehicle) => vehicle.ownershipStatus === "watching")
+      own: sortGarageVehicles(vehicles.filter((vehicle) => vehicle.ownershipStatus === "own"), sortKey),
+      owned: sortGarageVehicles(vehicles.filter((vehicle) => vehicle.ownershipStatus === "owned"), sortKey),
+      watching: sortGarageVehicles(vehicles.filter((vehicle) => vehicle.ownershipStatus === "watching"), sortKey)
     }),
-    [vehicles]
+    [sortKey, vehicles]
   );
   const visibleVehicles = useMemo(
-    () => (activeFilter === "all" ? vehicles : groupedVehicles[activeFilter]),
-    [activeFilter, groupedVehicles, vehicles]
+    () => (activeFilter === "all" ? sortGarageVehicles(vehicles, sortKey) : groupedVehicles[activeFilter]),
+    [activeFilter, groupedVehicles, sortKey, vehicles]
   );
   const allSelected = useMemo(
     () => visibleVehicles.length > 0 && visibleVehicles.every((vehicle) => selectedIds.includes(vehicle.id)),
@@ -131,7 +141,9 @@ export function GarageBulkDeleteForm({
                 ? `Next task: ${topTask.title} on ${topTask.dueDate}`
                 : "No maintenance plan yet"
               : vehicle.ownershipStatus === "owned"
-                ? "Historical vehicle record"
+                ? vehicle.dispositionDate
+                  ? `Previously owned · moved on ${vehicle.dispositionDate}`
+                  : "Historical vehicle record"
                 : watchOpportunity?.summary ?? "Watchlist vehicle"}
           </p>
           <Link href={`/vehicles/${vehicle.id}`} className="button button--ghost vehicle-card__link">
@@ -195,7 +207,8 @@ export function GarageBulkDeleteForm({
         </div>
       ) : null}
 
-      <div className="garage-filter-bar">
+      <div className="garage-filter-toolbar">
+        <div className="garage-filter-bar">
         {tabs.map((tab) => (
           <button
             key={tab.key}
@@ -207,6 +220,17 @@ export function GarageBulkDeleteForm({
             <strong>{tab.count}</strong>
           </button>
         ))}
+        </div>
+        <label className="garage-sort-control">
+          <span>Sort</span>
+          <select value={sortKey} onChange={(event) => setSortKey(event.target.value as GarageSortKey)}>
+            {sortOptions.map((option) => (
+              <option key={option.key} value={option.key}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
 
       {sections.map((section) =>
